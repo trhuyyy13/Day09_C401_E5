@@ -11,12 +11,14 @@
 ## 1. Tôi phụ trách phần nào? (100–150 từ)
 
 **Module/file tôi chịu trách nhiệm:**
- - File chính: `workers/policy_tool.py`, `docs/routing_decisions.md`
+ - File chính: `workers/policy_tool.py` và `docs/routing_decisions.md`
  - Functions tôi implement:
 	 - `analyze_policy(task, chunks)`: Rule-based policy analysis — phát hiện ngoại lệ (flash sale, sản phẩm kỹ thuật số, đã kích hoạt), trích xuất bằng chứng (lỗi sản phẩm, khung thời gian, chưa dùng), phân tích ngày giao dịch và trả về `policy_result` có cấu trúc (policy_applies, policy_name, exceptions_found, evidence, explanation).
 	 - `run(state)`: Entrypoint của worker — điều phối fallback retrieval (`search_kb` khi thiếu chunks), chạy `analyze_policy`, gọi MCP tools (`get_ticket_info`, `check_access_permission`) khi cần, và ghi `policy_result`, `mcp_tools_used`, `worker_io_logs` vào `state` để supervisor/synthesis dùng.
 	 - `_call_mcp_tool(tool_name, tool_input)`: Wrapper gọi MCP dispatcher trong-process — chuẩn hóa đầu ra (`output`, `error`, `timestamp`) và xử lý ngoại lệ để trace ổn định.
  - Sửa `tool_search_kb()` trong MCP server
+ - Làm docs/routing_decisions.md
+
 
 **Cách công việc của tôi kết nối với phần của thành viên khác:**
 
@@ -123,15 +125,17 @@ Tôi làm tốt ở việc biến policy worker từ skeleton TODO thành module
 
 **Tôi làm chưa tốt hoặc còn yếu ở điểm nào?**
 
-Tôi chưa chuẩn hóa hoàn toàn schema trace giữa `workers_called` và `worker_io_logs`.
+Trong phạm vi nhiệm vụ của tôi (`policy_tool.py` và `docs/routing_decisions.md`), tôi chưa chuẩn hoá hoàn toàn trace output: `workers_called` chỉ ghi tên worker, còn `worker_io_logs` ghi chi tiết `input`/`output`/`timestamp`. Vì vậy việc tổng hợp trace cho báo cáo routing và debug vẫn mất thời gian.
 
 **Nhóm phụ thuộc vào tôi ở đâu?** _(Phần nào của hệ thống bị block nếu tôi chưa xong?)_
 
-Nếu phần tôi chưa xong, các câu policy/access dễ sai logic hoặc thiếu bằng chứng dù route đúng.
+Nếu chưa xong: `synthesis` có thể thiếu `policy_result` chuẩn, script phân tích trace không tính được metric, và cơ chế HITL có thể không kích hoạt chính xác — làm giảm tính minh bạch và khả năng grading tự động.
 
 **Phần tôi phụ thuộc vào thành viên khác:** _(Tôi cần gì từ ai để tiếp tục được?)_
 
-Tôi phụ thuộc vào retrieval/supervisor để có chunks tốt và route_reason rõ.
+Cần: `retrieval` cung cấp chunks có `source`/`text`; `supervisor` xác nhận `route_reason`/`needs_tool`; `mcp_server` đảm bảo output có `source`; Ops cấp `OPENAI_API_KEY`.
+
+Cần thống nhất schema trace chung để mọi worker ghi log cùng định dạng.
 
 ---
 
