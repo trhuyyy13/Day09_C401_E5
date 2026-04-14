@@ -33,6 +33,40 @@ import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+# ─────────────────────────────────────────────
+# Helper: Lazy load ChromaDB & Model
+# ─────────────────────────────────────────────
+_chroma_client = None
+_chroma_col = None
+_embedding_model = None
+
+def get_chroma_col():
+    global _chroma_client, _chroma_col
+    if _chroma_client is None:
+        import chromadb
+        
+        # Load .env bằng tay nếu cần thiết (tránh lỗi api_key)
+        env_path = os.path.join(os.path.dirname(__file__), '.env')
+        if os.path.exists(env_path):
+            with open(env_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, val = line.split('=', 1)
+                        os.environ[key.strip()] = val.strip().strip('"').strip("'")
+                        
+        db_path = os.path.join(os.path.dirname(__file__), 'chroma_db')
+        _chroma_client = chromadb.PersistentClient(path=db_path)
+        _chroma_col = _chroma_client.get_or_create_collection('day09_docs')
+    return _chroma_col
+
+def get_embedding_model():
+    global _embedding_model
+    if _embedding_model is None:
+        from sentence_transformers import SentenceTransformer
+        _embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+    return _embedding_model
+
 
 # ─────────────────────────────────────────────
 # Tool Definitions (Schema Discovery)
@@ -135,30 +169,51 @@ TOOL_SCHEMAS = {
 def tool_search_kb(query: str, top_k: int = 3) -> dict:
     """
     Tìm kiếm Knowledge Base bằng semantic search.
-
-    TODO Sprint 3: Kết nối với ChromaDB thực.
-    Hiện tại: Delegate sang retrieval worker.
+    Đã update: Kết nối với ChromaDB thực.
     """
     try:
-        # Tái dùng retrieval logic từ workers/retrieval.py
-        import sys
-        sys.path.insert(0, os.path.dirname(__file__))
-        from workers.retrieval import retrieve_dense
-        chunks = retrieve_dense(query, top_k=top_k)
-        sources = list({c["source"] for c in chunks})
+        model = get_embedding_model()
+        col = get_chroma_col()
+
+        # Tạo vector embedding cho câu hỏi
+        query_embedding = model.encode(query).tolist()
+
+        # Truy vấn hệ thống ChromaDB
+        results = col.query(
+            query_embeddings=[query_embedding],
+            n_results=top_k
+        )
+
+        chunks = []
+        sources = set()
+
+        if results.get('documents') and len(results['documents']) > 0:
+            doc_list = results['documents'][0]
+            meta_list = results['metadatas'][0] if results.get('metadatas') else [{}] * len(doc_list)
+            dist_list = results['distances'][0] if results.get('distances') else [0.0] * len(doc_list)
+            
+            for doc, meta, dist in zip(doc_list, meta_list, dist_list):
+                source = meta.get('source', 'unknown') if isinstance(meta, dict) else 'unknown'
+                chunks.append({
+                    "text": doc,
+                    "source": source,
+                    "score": round(dist, 4) if isinstance(dist, (float, int)) else dist
+                })
+                sources.add(source)
+
         return {
             "chunks": chunks,
-            "sources": sources,
+            "sources": list(sources),
             "total_found": len(chunks),
         }
     except Exception as e:
-        # Fallback: return mock data nếu ChromaDB chưa setup
+        # Fallback: return mock data
         return {
             "chunks": [
                 {
-                    "text": f"[MOCK] Không thể query ChromaDB: {e}. Kết quả giả lập.",
+                    "text": f"[MOCK] Hệ thống không thể lấy dữ liệu: {e}",
                     "source": "mock_data",
-                    "score": 0.5,
+                    "score": 0.0,
                 }
             ],
             "sources": ["mock_data"],
@@ -328,13 +383,64 @@ def dispatch_tool(tool_name: str, tool_input: dict) -> dict:
 
 
 # ─────────────────────────────────────────────
-# Test & Demo
+# FastAPI Server Implementation (Advanced Option)
+# ─────────────────────────────────────────────
+
+try:
+    from fastapi import FastAPI, HTTPException
+    from pydantic import BaseModel
+
+    app = FastAPI(title="MCP HTTP Server", description="MCP Server qua HTTP cho Sprint 3", version="1.0")
+
+    class ToolCallRequest(BaseModel):
+        tool: str
+        input: Dict[str, Any]
+
+    @app.get("/")
+    def read_root():
+        return {
+            "message": "MCP Server hoạt động tốt!",
+            "docs_url": "http://localhost:8080/docs",
+            "info": "Dùng GET /tools để khám phá chức năng, POST /call để chạy tool."
+        }
+
+    @app.get("/tools")
+    def api_get_tools():
+        return {"tools": list_tools()}
+
+    @app.post("/call")
+    def api_call_tool(request: ToolCallRequest):
+        print(f"[HTTP] Agent đang gọi tool -> {request.tool}")
+        result = dispatch_tool(request.tool, request.input)
+        return result
+
+except ImportError:
+    app = None
+
+# ─────────────────────────────────────────────
+# Test & Demo / HTTP Entrypoint
 # ─────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("MCP Server — Tool Discovery & Test")
-    print("=" * 60)
+    import sys
+    # Fix unicode error for Windows terminal when printing emojis
+    if sys.stdout.encoding != 'utf-8':
+        sys.stdout.reconfigure(encoding='utf-8')
+
+    if len(sys.argv) > 1 and sys.argv[1] == "--serve":
+        # Chạy server FastAPI
+        if app is None:
+            print("❌ FastAPI không được tìm thấy. Vui lòng cài đặt: pip install fastapi uvicorn")
+            sys.exit(1)
+        import uvicorn
+        print("🚀 Đang khởi động MCP HTTP Server tại: http://localhost:8080")
+        print("👉 Nhấn giữ Ctrl + Click vào link sau để xem giao diện API: http://localhost:8080/docs")
+        uvicorn.run("mcp_server:app", host="0.0.0.0", port=8080, reload=False)
+    else:
+        # Chế độ chạy file bình thường (mặc định)
+        print("=" * 60)
+        print("MCP Server — Tool Discovery & Test")
+        print("=" * 60)
 
     # 1. Discover tools
     print("\n📋 Available Tools:")
@@ -375,4 +481,5 @@ if __name__ == "__main__":
     print(f"  Error: {err.get('error')}")
 
     print("\n✅ MCP server test done.")
-    print("\nTODO Sprint 3: Implement HTTP server nếu muốn bonus +2.")
+    print("\n💡 GỢI Ý BONUS SPRINT 3:")
+    print("   Bạn đã bật chế độ nâng cao. Để chạy Web Server, hãy dùng lệnh: python mcp_server.py --serve")
