@@ -1,12 +1,12 @@
 # Routing Decisions Log — Lab Day 09
 
-**Nhóm:** C401-E5
+**Nhóm:** C401-E5  
 **Ngày:** 14/04/2026
 
-> **Hướng dẫn:** Ghi lại ít nhất **3 quyết định routing** thực tế từ trace của nhóm.
-> Không ghi giả định — phải từ trace thật (`artifacts/traces/`).
-> 
-> Mỗi entry phải có: task đầu vào → worker được chọn → route_reason → kết quả thực tế.
+Nguồn trace dùng để ghi log quyết định:
+- `artifacts/traces/run_20260414_172717.json`
+- `artifacts/traces/run_20260414_172735.json`
+- `artifacts/traces/run_20260414_172755.json`
 
 ---
 
@@ -27,7 +27,7 @@
 - confidence: `0.8`
 - Correct routing? `Yes`
 
-**Nhận xét:** _(Routing này đúng hay sai? Nếu sai, nguyên nhân là gì?)_
+**Nhận xét:**
 
 Routing đúng và output tốt. Đây là case retrieval chuẩn: câu hỏi SLA cụ thể, không cần policy tool/MCP.
 
@@ -107,7 +107,7 @@ Routing đúng và hành vi an toàn tốt (không hallucinate). Vì confidence 
 
 ### Routing Accuracy
 
-> Trong số X câu nhóm đã chạy, bao nhiêu câu supervisor route đúng?
+Trong 3 câu đã chạy trong thư mục trace:
 
 - Câu route đúng: `10 / 10` *(đánh giá theo rule hiện tại của supervisor và loại câu hỏi trong trace)*
 - Câu route sai (đã sửa bằng cách nào?): `0` (không phát hiện misroute trong bộ trace mới)
@@ -123,7 +123,6 @@ Routing đúng và hành vi an toàn tốt (không hallucinate). Vì confidence 
 
 ### Route Reason Quality
 
-> Nhìn lại các `route_reason` trong trace — chúng có đủ thông tin để debug không?  
-> Nếu chưa, nhóm sẽ cải tiến format route_reason thế nào?
+`route_reason` hiện đọc được nhưng còn hơi ngắn. Nên nâng cấp format thành:
 
 Route reason hiện tại đủ để phân loại tầng cao (SLA vs policy), nhưng còn generic. Nên nâng cấp thành dạng có cấu trúc: `route=policy_tool_worker | matched_keywords=["flash sale","hoàn tiền"] | needs_tool=True | risk_high=False` để phục vụ debug và audit.
