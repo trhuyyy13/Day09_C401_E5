@@ -125,7 +125,7 @@ Tôi làm tốt ở việc biến policy worker từ skeleton TODO thành module
 
 **Tôi làm chưa tốt hoặc còn yếu ở điểm nào?**
 
-Trong phạm vi nhiệm vụ của tôi (chủ `policy_tool.py` và `docs`), cần chuẩn hoá schema trace giữa `workers_called` và `worker_io_logs`. Hiện một số worker chỉ ghi tên, trong khi các worker khác ghi chi tiết `input`/`output`/`timestamp`, làm việc tổng hợp trace tự động và debug kém hiệu quả.
+Trong phạm vi nhiệm vụ của tôi (`policy_tool.py` và `docs/routing_decisions.md`), tôi chưa chuẩn hoá hoàn toàn trace output: `workers_called` chỉ ghi tên worker, còn `worker_io_logs` ghi chi tiết `input`/`output`/`timestamp`. Vì vậy việc tổng hợp trace cho báo cáo routing và debug vẫn mất thời gian.
 
 **Nhóm phụ thuộc vào tôi ở đâu?** _(Phần nào của hệ thống bị block nếu tôi chưa xong?)_
 
