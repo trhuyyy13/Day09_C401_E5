@@ -18,6 +18,8 @@
 	 - `_call_mcp_tool(tool_name, tool_input)`: Wrapper gọi MCP dispatcher trong-process — chuẩn hóa đầu ra (`output`, `error`, `timestamp`) và xử lý ngoại lệ để trace ổn định.
  - Sửa `tool_search_kb()` trong MCP server
  - Làm docs/routing_decisions.md
+
+
 **Cách công việc của tôi kết nối với phần của thành viên khác:**
 
 Tôi là điểm nối giữa phần điều phối (`supervisor`/`retrieval`) và bước tổng hợp câu trả lời cuối cùng. Tôi đã hoàn thiện các hàm then chốt trong `policy_tool.py`:
