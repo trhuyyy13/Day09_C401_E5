@@ -1,6 +1,6 @@
 # Báo Cáo Cá Nhân — Lab Day 09: Multi-Agent Orchestration
 
-**Họ và tên:** Lương Anh Tuấn - (MSSV: )
+**Họ và tên:** Lương Anh Tuấn - 2A202600113
 
 **Vai trò trong nhóm:** Retrieval & Synthesis Worker Owner
 
