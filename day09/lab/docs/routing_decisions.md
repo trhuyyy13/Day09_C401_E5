@@ -1,7 +1,7 @@
 # Routing Decisions Log — Lab Day 09
 
-**Nhóm:** Day09_C401_E5  
-**Ngày:** 2026-04-14
+**Nhóm:** C401-E5  
+**Ngày:** 14/04/2026
 
 Nguồn trace dùng để ghi log quyết định:
 - `artifacts/traces/run_20260414_172717.json`
@@ -13,63 +13,85 @@ Nguồn trace dùng để ghi log quyết định:
 ## Routing Decision #1
 
 **Task đầu vào:**
-> SLA xử lý ticket P1 là bao lâu?
+> Ticket P1 được tạo lúc 22:47. Đúng theo SLA, ai nhận thông báo đầu tiên và qua kênh nào? Deadline escalation là mấy giờ?
 
 **Worker được chọn:** `retrieval_worker`  
 **Route reason (từ trace):** `task relates to SLA or incident`  
 **MCP tools được gọi:** Không có  
-**Workers called sequence:** `retrieval_worker -> synthesis_worker`
+**Workers called sequence:** `synthesis_worker` *(trace `workers_called` chưa log retrieval dù retrieval đã chạy trong `worker_io_logs`)*
+
+**Trace file:** `artifacts/traces/run_20260414_174943.json`
 
 **Kết quả thực tế:**
-- final_answer (ngắn): `Phản hồi ban đầu 15 phút, resolution 4 giờ, escalation sau 10 phút không phản hồi.`
-- confidence: `0.81`
-- Correct routing? **Yes**
+- final_answer (ngắn): Trả lời đúng 3 ý chính: người nhận cảnh báo đầu tiên, kênh PagerDuty và deadline escalation 22:57, có citation.
+- confidence: `0.8`
+- Correct routing? `Yes`
 
 **Nhận xét:**
 
-Route này hợp lý vì câu hỏi thuộc nhóm SLA/incident. Trace mới cho thấy retrieval lấy đúng `sla_p1_2026.txt` và synthesis trả lời grounded, nên route này đúng cả về intent lẫn kết quả.
+Routing đúng và output tốt. Đây là case retrieval chuẩn: câu hỏi SLA cụ thể, không cần policy tool/MCP.
 
 ---
 
 ## Routing Decision #2
 
 **Task đầu vào:**
-> Khách hàng có thể yêu cầu hoàn tiền trong bao nhiêu ngày?
+> Engineer cần Level 3 access để khắc phục P1 đang active. Bao nhiêu người phải phê duyệt? Ai là người phê duyệt cuối cùng?
 
 **Worker được chọn:** `policy_tool_worker`  
 **Route reason (từ trace):** `task relates to policy or access check`  
-**MCP tools được gọi:** `search_kb`  
-**Workers called sequence:** `policy_tool_worker -> retrieval_worker -> synthesis_worker`
+**MCP tools được gọi:** `search_kb`, `get_ticket_info`, `check_access_permission`  
+**Workers called sequence:** `policy_tool_worker -> synthesis_worker`
+
+**Trace file:** `artifacts/traces/run_20260414_174957.json`
 
 **Kết quả thực tế:**
-- final_answer (ngắn): `Khách hàng có thể yêu cầu hoàn tiền trong vòng 7 ngày làm việc kể từ khi xác nhận đơn hàng.`
-- confidence: `0.81`
-- Correct routing? **Yes**
+- final_answer (ngắn): Trả lời đúng cần 3 approver cho Level 3 (Line Manager, IT Admin, IT Security), và IT Security là cấp phê duyệt cao nhất.
+- confidence: `0.8`
+- Correct routing? `Yes`
 
 **Nhận xét:**
 
-Route đúng vì task cần policy lookup về refund window. Trace cho thấy policy worker gọi `search_kb` trước, sau đó synthesis ghép câu trả lời đúng từ `policy_refund_v4.txt`.
+Routing đúng cho case policy + access. Điểm tốt là policy worker đã gọi đủ 3 MCP tools; điểm cần cải tiến là trace `workers_called` chưa phản ánh rõ retrieval step.
 
 ---
 
 ## Routing Decision #3
 
 **Task đầu vào:**
-> Ai phải phê duyệt để cấp quyền Level 3?
+> Mức phạt tài chính cụ thể khi đội IT vi phạm SLA P1 resolution time (không resolve trong 4 giờ) là bao nhiêu?
 
-**Worker được chọn:** `policy_tool_worker`  
-**Route reason (từ trace):** `task relates to policy or access check`  
-**MCP tools được gọi:** `search_kb`, `check_access_permission`  
-**Workers called sequence:** `policy_tool_worker -> retrieval_worker -> synthesis_worker`
+**Worker được chọn:** `retrieval_worker`  
+**Route reason (từ trace):** `task relates to SLA or incident`  
+**MCP tools được gọi:** Không có  
+**Workers called sequence:** `synthesis_worker`
+
+**Trace file:** `artifacts/traces/run_20260414_175009.json`
 
 **Kết quả thực tế:**
-- final_answer (ngắn): `Level 3 cần phê duyệt của Line Manager, IT Admin và IT Security.`
-- confidence: `0.81`
-- Correct routing? **Yes**
+- final_answer (ngắn): Abstain đúng: “Không đủ thông tin trong tài liệu nội bộ …”, có citation.
+- confidence: `0.3`
+- Correct routing? `Yes`
 
 **Nhận xét:**
 
-Đây là case tốt cho multi-agent vì vừa cần policy/access vừa cần kiểm tra quyền cụ thể. Policy worker gọi `search_kb` rồi `check_access_permission`, nên routing và tool choice đều đúng.
+Routing đúng và hành vi an toàn tốt (không hallucinate). Vì confidence thấp nên `hitl_triggered=True`, phù hợp guideline.
+
+---
+
+## Routing Decision #4 (tuỳ chọn — bonus)
+
+**Task đầu vào:**
+> Khách hàng mua sản phẩm trong Flash Sale, lỗi NSX, yêu cầu hoàn tiền trong 5 ngày. Có được hoàn tiền không?
+
+**Worker được chọn:** `policy_tool_worker`  
+**Route reason:** `task relates to policy or access check`
+
+**Trace file:** `artifacts/traces/run_20260414_175024.json`
+
+**Nhận xét: Đây là trường hợp routing khó nhất trong lab. Tại sao?**
+
+Đây là case khó vì có điều kiện đủ hoàn tiền (lỗi NSX, trong 5 ngày) nhưng bị chặn bởi ngoại lệ Flash Sale. Cần synthesis diễn đạt rõ xung đột điều kiện-vs-ngoại lệ để tránh câu trả lời mâu thuẫn.
 
 ---
 
@@ -79,28 +101,28 @@ Route đúng vì task cần policy lookup về refund window. Trace cho thấy p
 
 | Worker | Số câu được route | % tổng |
 |--------|------------------|--------|
-| retrieval_worker | 1 | 33.3% |
-| policy_tool_worker | 2 | 66.7% |
-| human_review | 0 | 0.0% |
+| retrieval_worker | 5 | 50% |
+| policy_tool_worker | 5 | 50% |
+| human_review | 0 | 0% |
 
 ### Routing Accuracy
 
 Trong 3 câu đã chạy trong thư mục trace:
 
-- Câu route đúng: 3 / 3
-- Câu route sai: 0
-- Câu trigger HITL: 0
+- Câu route đúng: `10 / 10` *(đánh giá theo rule hiện tại của supervisor và loại câu hỏi trong trace)*
+- Câu route sai (đã sửa bằng cách nào?): `0` (không phát hiện misroute trong bộ trace mới)
+- Câu trigger HITL: `2` (`run_20260414_175009.json`, `run_20260414_175024.json`)
 
 ### Lesson Learned về Routing
 
-1. Rule-based routing theo intent keyword (SLA/incident vs policy/access) đang đủ chính xác cho tập trace nhỏ.
-2. `route_reason` là bắt buộc để tách lỗi routing khỏi lỗi synthesis, giúp debug nhanh hơn.
-3. MCP nên được bật theo từng intent cụ thể: SLA query chỉ cần retrieval, còn policy/access query mới cần tool worker.
+> Quyết định kỹ thuật quan trọng nhất nhóm đưa ra về routing logic là gì?  
+> (VD: dùng keyword matching vs LLM classifier, threshold confidence cho HITL, v.v.)
+
+1. Keyword routing hoạt động tốt cho baseline, nhưng cần rule ưu tiên cho câu multi-hop (policy + SLA) để tăng tính đầy đủ của evidence trước synthesis.
+2. Nên chuẩn hoá trace schema giữa `workers_called` và `worker_io_logs` để dễ debug luồng thực tế hơn.
 
 ### Route Reason Quality
 
 `route_reason` hiện đọc được nhưng còn hơi ngắn. Nên nâng cấp format thành:
 
-`matched_intents=[policy,access]; selected=policy_tool_worker; confidence=0.xx; fallback=false`
-
-Format này giúp debug rõ hơn khi task chứa nhiều intent chồng lấp.
+Route reason hiện tại đủ để phân loại tầng cao (SLA vs policy), nhưng còn generic. Nên nâng cấp thành dạng có cấu trúc: `route=policy_tool_worker | matched_keywords=["flash sale","hoàn tiền"] | needs_tool=True | risk_high=False` để phục vụ debug và audit.

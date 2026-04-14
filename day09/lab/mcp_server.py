@@ -38,7 +38,18 @@ from typing import Any, Dict, List, Optional
 # ─────────────────────────────────────────────
 _chroma_client = None
 _chroma_col = None
-_embedding_model = None
+_embedding_model = "text-embedding-3-small"
+
+from openai import OpenAI
+client = OpenAI()
+
+def get_embedding(text: str):
+    response = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=text
+    )
+    return response.data[0].embedding
+
 
 def get_chroma_col():
     global _chroma_client, _chroma_col
@@ -172,11 +183,9 @@ def tool_search_kb(query: str, top_k: int = 3) -> dict:
     Đã update: Kết nối với ChromaDB thực.
     """
     try:
-        model = get_embedding_model()
         col = get_chroma_col()
-
         # Tạo vector embedding cho câu hỏi
-        query_embedding = model.encode(query).tolist()
+        query_embedding = get_embedding(query)
 
         # Truy vấn hệ thống ChromaDB
         results = col.query(

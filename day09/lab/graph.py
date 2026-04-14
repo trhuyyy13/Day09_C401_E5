@@ -279,11 +279,10 @@ if __name__ == "__main__":
     print("Day 09 Lab — Supervisor-Worker Graph")
     print("=" * 60)
 
-    test_queries = [
-        "SLA xử lý ticket P1 là bao lâu?",
-        "Khách hàng Flash Sale yêu cầu hoàn tiền vì sản phẩm lỗi — được không?",
-        "Cần cấp quyền Level 3 để khắc phục P1 khẩn cấp. Quy trình là gì?",
-    ]
+    with open("grading_questions.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    test_queries = [item["question"] for item in data]
 
     for query in test_queries:
         print(f"\n▶ Query: {query}")
