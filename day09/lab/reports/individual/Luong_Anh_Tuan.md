@@ -33,7 +33,13 @@ Kết quả retrieval của tôi là đầu vào trực tiếp cho synthesis và
 
 ## 2. Tôi đã ra một quyết định kỹ thuật gì? (150–200 từ)
 
-Quyết định kỹ thuật quan trọng nhất của tôi là thiết kế retrieval theo hướng worker stateless nhưng vẫn dùng ChromaDB persistent collection làm lớp lưu trữ trung tâm, thay vì giữ vector trong bộ nhớ tạm hoặc trả về dữ liệu mock. Tôi gắn embedding function trực tiếp vào collection và cho `search()` truy vấn bằng `query_texts`, vì cách này giảm nguy cơ lệch giữa bước index và bước query, đồng thời đơn giản hóa code gọi bên ngoài. Khi collection rỗng, worker tự build index từ toàn bộ file `.txt` trong `data/docs/`, nên pipeline có thể chạy độc lập ngay cả khi người dùng chưa chạy bước chuẩn bị dữ liệu thủ công. Tôi cũng chuẩn hoá output của retrieval theo dạng `text/source/score/metadata`, sắp xếp kết quả theo score giảm dần, và dedupe danh sách nguồn trước khi ghi vào state. Quyết định này giúp downstream worker như synthesis nhận đầu vào ổn định, dễ trace, và giảm rủi ro sinh câu trả lời không grounded.
+**Quyết định:** Tôi chọn thiết kế retrieval theo hướng worker stateless nhưng vẫn dùng ChromaDB persistent collection làm lớp lưu trữ trung tâm, thay vì giữ vector trong bộ nhớ tạm hoặc trả về dữ liệu mock.
+
+**Lý do:**
+Tôi gắn embedding function trực tiếp vào collection và cho `search()` truy vấn bằng `query_texts` để giảm nguy cơ lệch giữa bước index và bước query, đồng thời đơn giản hóa code gọi bên ngoài. Khi collection rỗng, worker tự build index từ toàn bộ file `.txt` trong `data/docs/`, nên pipeline vẫn chạy được ngay cả khi người dùng chưa chuẩn bị dữ liệu thủ công. Tôi cũng chuẩn hoá output của retrieval theo dạng `text/source/score/metadata`, sắp xếp theo score giảm dần và dedupe source trước khi ghi vào state, để synthesis nhận context ổn định hơn.
+
+**Trade-off đã chấp nhận:**
+Tôi chấp nhận việc worker phụ thuộc vào ChromaDB persistent storage và embedding API, đổi lại luồng retrieval nhất quán hơn, dễ debug hơn, và ít phải xử lý dữ liệu mock trong pipeline. Thiết kế này cũng làm giảm số nhánh xử lý đặc biệt ở tầng graph, vì retrieval có thể tự khởi tạo index khi collection trống.
 
 **Bằng chứng từ trace/code:**
 
@@ -55,15 +61,16 @@ chunks.sort(key=lambda x: x["score"], reverse=True)
 
 ## 3. Tôi đã sửa một lỗi gì? (150–200 từ)
 
-**Lỗi:** Retrieval đôi khi trả về quá ít hoặc không có chunks khi collection ChromaDB chưa được index đầy đủ, dẫn đến synthesis thiếu evidence để tổng hợp câu trả lời.
+**Lỗi:** Retrieval đôi khi trả về quá ít hoặc không có chunks khi collection ChromaDB chưa được index đầy đủ, khiến synthesis thiếu evidence để tổng hợp câu trả lời.
 
-**Symptom:** Một số run trước đây trả về `Retrieved: 0 chunks`; synthesis phải abstain hoặc chỉ trả lời rất chung chung vì không có evidence.
+**Symptom:** Một số run trước đây trả về `Retrieved: 0 chunks`; khi đó synthesis thường phải abstain hoặc chỉ trả lời rất chung chung vì không có tài liệu đủ mạnh để cite.
 
-**Root cause:** Index chưa được build tự động khi collection trống, nên truy vấn đi vào collection rỗng và không có tài liệu để match.
+**Root cause:** Index chưa được build tự động khi collection trống, nên truy vấn đi vào một collection rỗng và không có tài liệu để match. Điều này làm pipeline bị “đứt” ngay ở bước đầu vào của synthesis.
 
 **Cách sửa:**
-- Trong `retrieval.py` tôi đảm bảo `_get_collection()` build index khi collection rỗng (gọi `_build_index()`).
-- Trong `synthesis.py` thêm fallback rule-based `_safe_rule_based_answer()` và chính sách `ABSTAIN_TEXT` khi không có chunks; thêm `_estimate_confidence()` để tránh trả lời khi thiếu bằng chứng.
+- Trong `retrieval.py` tôi đảm bảo `_get_collection()` tự gọi `_build_index()` khi `col.count() == 0`.
+- Trong `synthesis.py` tôi thêm fallback rule-based `_safe_rule_based_answer()` và `ABSTAIN_TEXT` để tránh hallucination khi không có chunks.
+- Tôi cũng thêm `_estimate_confidence()` để synthesis có thể hạ mức tin cậy khi evidence yếu, thay vì trả lời chắc chắn một cách sai lệch.
 
 **Bằng chứng trước/sau:**
 
