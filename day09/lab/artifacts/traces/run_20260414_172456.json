@@ -3,28 +3,27 @@
   "route_reason": "task relates to SLA or incident",
   "risk_high": false,
   "needs_tool": false,
-  "hitl_triggered": false,
+  "hitl_triggered": true,
   "retrieved_chunks": [],
   "retrieved_sources": [],
   "policy_result": {},
   "mcp_tools_used": [],
-  "final_answer": "[SYNTHESIS ERROR] Không thể gọi LLM. Kiểm tra API key trong .env.",
+  "final_answer": "Không đủ thông tin trong tài liệu nội bộ để trả lời chính xác câu hỏi này.",
   "sources": [],
   "confidence": 0.1,
   "history": [
     "[supervisor] received task: SLA xử lý ticket P1 là bao lâu?",
     "[supervisor] route=retrieval_worker reason=task relates to SLA or incident",
-    "[retrieval_worker] retrieved 0 chunks from []",
+    "[synthesis_worker] low confidence=0.1 -> hitl_triggered=True",
     "[synthesis_worker] answer generated, confidence=0.1, sources=[]",
-    "[graph] completed in 43857ms"
+    "[graph] completed in 30018ms"
   ],
   "workers_called": [
-    "retrieval_worker",
     "synthesis_worker"
   ],
   "supervisor_route": "retrieval_worker",
-  "latency_ms": 43857,
-  "run_id": "run_20260414_152639",
+  "latency_ms": 30018,
+  "run_id": "run_20260414_172456",
   "worker_io_logs": [
     {
       "worker": "retrieval_worker",
@@ -32,11 +31,13 @@
         "task": "SLA xử lý ticket P1 là bao lâu?",
         "top_k": 3
       },
-      "output": {
-        "chunks_count": 0,
-        "sources": []
+      "timestamp_start": "2026-04-14T17:24:56",
+      "status": "error",
+      "error": {
+        "code": "RETRIEVAL_FAILED",
+        "reason": "Connection error. in upsert."
       },
-      "error": null
+      "timestamp_end": "2026-04-14T17:25:26"
     },
     {
       "worker": "synthesis_worker",
@@ -46,9 +47,12 @@
         "has_policy": false
       },
       "output": {
-        "answer_length": 65,
+        "answer_length": 74,
         "sources": [],
-        "confidence": 0.1
+        "confidence": 0.1,
+        "has_citation": false,
+        "abstained": true,
+        "policy_context_used": false
       },
       "error": null
     }
