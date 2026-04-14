@@ -14,16 +14,17 @@ Outputs:
     artifacts/eval_report.json  — báo cáo tổng kết
 """
 
+from graph import run_graph, save_trace
 import json
 import os
 import sys
 import argparse
+import re
 from datetime import datetime
 from typing import Optional
 
 # Import graph
 sys.path.insert(0, os.path.dirname(__file__))
-from graph import run_graph, save_trace
 
 
 # ─────────────────────────────────────────────
@@ -79,7 +80,8 @@ def run_test_questions(questions_file: str = "data/test_questions.json") -> list
                 "result": None,
             })
 
-    print(f"\n✅ Done. {sum(1 for r in results if r.get('result'))} / {len(results)} succeeded.")
+    print(
+        f"\n✅ Done. {sum(1 for r in results if r.get('result'))} / {len(results)} succeeded.")
     return results
 
 
@@ -131,7 +133,8 @@ def run_grading_questions(questions_file: str = "data/grading_questions.json") -
                     "latency_ms": result.get("latency_ms"),
                     "timestamp": datetime.now().isoformat(),
                 }
-                print(f"  ✓ route={record['supervisor_route']}, conf={record['confidence']:.2f}")
+                print(
+                    f"  ✓ route={record['supervisor_route']}, conf={record['confidence']:.2f}")
             except Exception as e:
                 record = {
                     "id": q_id,
@@ -220,11 +223,13 @@ def analyze_traces(traces_dir: str = "artifacts/traces") -> dict:
     total = len(traces)
     metrics = {
         "total_traces": total,
-        "routing_distribution": {k: f"{v}/{total} ({100*v//total}%)" for k, v in routing_counts.items()},
+        "routing_distribution": {
+            k: f"{v}/{total} ({round(100 * v / total, 1)}%)" for k, v in routing_counts.items()
+        },
         "avg_confidence": round(sum(confidences) / len(confidences), 3) if confidences else 0,
         "avg_latency_ms": round(sum(latencies) / len(latencies)) if latencies else 0,
-        "mcp_usage_rate": f"{mcp_calls}/{total} ({100*mcp_calls//total}%)" if total else "0%",
-        "hitl_rate": f"{hitl_triggers}/{total} ({100*hitl_triggers//total}%)" if total else "0%",
+        "mcp_usage_rate": f"{mcp_calls}/{total} ({round(100 * mcp_calls / total, 1)}%)" if total else "0%",
+        "hitl_rate": f"{hitl_triggers}/{total} ({round(100 * hitl_triggers / total, 1)}%)" if total else "0%",
         "top_sources": sorted(source_counts.items(), key=lambda x: -x[1])[:5],
     }
 
@@ -242,26 +247,108 @@ def compare_single_vs_multi(
     """
     So sánh Day 08 (single agent RAG) vs Day 09 (multi-agent).
 
-    TODO Sprint 4: Điền kết quả thực tế từ Day 08 vào day08_baseline.
+    Dùng dữ liệu thực tế Day 08 từ day08/lab/results nếu có.
 
     Returns:
         dict của comparison metrics
     """
+
+    def _extract_day08_metrics(results_dir: str) -> dict:
+        """Load Day 08 metrics from scorecard files and build comparable baseline."""
+        baseline_json_path = os.path.join(
+            results_dir, "scorecard_baseline.json")
+        baseline_md_path = os.path.join(results_dir, "scorecard_baseline.md")
+
+        day08 = {
+            "total_questions": 0,
+            "avg_confidence": None,
+            "avg_latency_ms": None,
+            "abstain_rate": "N/A",
+            "multi_hop_accuracy": "N/A",
+            "metric_note": "avg_confidence dùng faithfulness trung bình làm proxy cho Day 08.",
+            "source_files": [],
+        }
+
+        data = []
+        if os.path.exists(baseline_json_path):
+            with open(baseline_json_path, encoding="utf-8") as f:
+                data = json.load(f)
+            day08["source_files"].append(baseline_json_path)
+
+            total = len(data)
+            day08["total_questions"] = total
+
+            abstain = sum(
+                1 for item in data
+                if "không đủ dữ liệu" in (item.get("answer", "").lower())
+            )
+            if total:
+                day08["abstain_rate"] = f"{abstain}/{total} ({round(100 * abstain / total, 1)}%)"
+
+            multi_hop_items = [
+                item for item in data
+                if "cross-document" in (item.get("category", "").lower())
+            ]
+            if multi_hop_items:
+                # Xem một câu là "đúng" nếu relevance + completeness >= 4.
+                ok = sum(
+                    1
+                    for item in multi_hop_items
+                    if (item.get("relevance") or 0) >= 4 and (item.get("completeness") or 0) >= 4
+                )
+                n = len(multi_hop_items)
+                day08["multi_hop_accuracy"] = f"{ok}/{n} ({round(100 * ok / n, 1)}%)"
+
+        if os.path.exists(baseline_md_path):
+            with open(baseline_md_path, encoding="utf-8") as f:
+                md = f.read()
+            day08["source_files"].append(baseline_md_path)
+
+            # Faithfulness được dùng như confidence proxy cho Day 08.
+            m = re.search(r"Faithfulness\s*\|\s*([0-9.]+)/5", md)
+            if m:
+                day08["avg_confidence"] = float(m.group(1))
+
+            if not day08["total_questions"] and data:
+                day08["total_questions"] = len(data)
+
+        return day08
+
     multi_metrics = analyze_traces(multi_traces_dir)
 
-    # TODO: Load Day 08 results nếu có
-    # Nếu không có, dùng baseline giả lập để format
+    day08_results_dir = os.path.normpath(
+        os.path.join(os.path.dirname(__file__), "..",
+                     "..", "day08", "lab", "results")
+    )
+
     day08_baseline = {
-        "total_questions": 15,
-        "avg_confidence": 0.0,          # TODO: Điền từ Day 08 eval.py
-        "avg_latency_ms": 0,            # TODO: Điền từ Day 08
-        "abstain_rate": "?",            # TODO: Điền từ Day 08
-        "multi_hop_accuracy": "?",      # TODO: Điền từ Day 08
+        "total_questions": 0,
+        "avg_confidence": None,
+        "avg_latency_ms": None,
+        "abstain_rate": "N/A",
+        "multi_hop_accuracy": "N/A",
+        "metric_note": "Không tìm thấy dữ liệu Day 08 để so sánh.",
+        "source_files": [],
     }
 
-    if day08_results_file and os.path.exists(day08_results_file):
-        with open(day08_results_file) as f:
+    if os.path.isdir(day08_results_dir):
+        day08_baseline = _extract_day08_metrics(day08_results_dir)
+    elif day08_results_file and os.path.exists(day08_results_file):
+        with open(day08_results_file, encoding="utf-8") as f:
             day08_baseline = json.load(f)
+
+    day08_conf = day08_baseline.get("avg_confidence")
+    day08_latency = day08_baseline.get("avg_latency_ms")
+    day09_conf = multi_metrics.get("avg_confidence")
+    day09_latency = multi_metrics.get("avg_latency_ms")
+
+    conf_delta = "N/A"
+    if isinstance(day08_conf, (int, float)) and isinstance(day09_conf, (int, float)):
+        conf_delta = round(day09_conf - day08_conf, 3)
+
+    latency_delta = "N/A"
+    if isinstance(day08_latency, (int, float)) and isinstance(day09_latency, (int, float)):
+        latency_delta = day09_latency - day08_latency
 
     comparison = {
         "generated_at": datetime.now().isoformat(),
@@ -269,8 +356,9 @@ def compare_single_vs_multi(
         "day09_multi_agent": multi_metrics,
         "analysis": {
             "routing_visibility": "Day 09 có route_reason cho từng câu → dễ debug hơn Day 08",
-            "latency_delta": "TODO: Điền delta latency thực tế",
-            "accuracy_delta": "TODO: Điền delta accuracy thực tế từ grading",
+            "latency_delta_ms": latency_delta,
+            "confidence_delta": conf_delta,
+            "accuracy_delta": "Cần grading cùng bộ câu giữa Day 08/Day 09 để kết luận chắc chắn.",
             "debuggability": "Multi-agent: có thể test từng worker độc lập. Single-agent: không thể.",
             "mcp_benefit": "Day 09 có thể extend capability qua MCP không cần sửa core. Day 08 phải hard-code.",
         },
@@ -315,11 +403,16 @@ def print_metrics(metrics: dict):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Day 09 Lab — Trace Evaluation")
-    parser.add_argument("--grading", action="store_true", help="Run grading questions")
-    parser.add_argument("--analyze", action="store_true", help="Analyze existing traces")
-    parser.add_argument("--compare", action="store_true", help="Compare single vs multi")
-    parser.add_argument("--test-file", default="data/test_questions.json", help="Test questions file")
+    parser = argparse.ArgumentParser(
+        description="Day 09 Lab — Trace Evaluation")
+    parser.add_argument("--grading", action="store_true",
+                        help="Run grading questions")
+    parser.add_argument("--analyze", action="store_true",
+                        help="Analyze existing traces")
+    parser.add_argument("--compare", action="store_true",
+                        help="Compare single vs multi")
+    parser.add_argument(
+        "--test-file", default="data/test_questions.json", help="Test questions file")
     args = parser.parse_args()
 
     if args.grading:

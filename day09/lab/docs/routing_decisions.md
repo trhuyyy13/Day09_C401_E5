@@ -1,89 +1,75 @@
 # Routing Decisions Log — Lab Day 09
 
-**Nhóm:** ___________  
-**Ngày:** ___________
+**Nhóm:** Day09_C401_E5  
+**Ngày:** 2026-04-14
 
-> **Hướng dẫn:** Ghi lại ít nhất **3 quyết định routing** thực tế từ trace của nhóm.
-> Không ghi giả định — phải từ trace thật (`artifacts/traces/`).
-> 
-> Mỗi entry phải có: task đầu vào → worker được chọn → route_reason → kết quả thực tế.
+Nguồn trace dùng để ghi log quyết định:
+- `artifacts/traces/run_20260414_152639.json`
+- `artifacts/traces/run_20260414_152723.json`
+- `artifacts/traces/run_20260414_152735.json`
 
 ---
 
 ## Routing Decision #1
 
 **Task đầu vào:**
-> _________________
+> SLA xử lý ticket P1 là bao lâu?
 
-**Worker được chọn:** `___________________`  
-**Route reason (từ trace):** `___________________`  
-**MCP tools được gọi:** _________________  
-**Workers called sequence:** _________________
+**Worker được chọn:** `retrieval_worker`  
+**Route reason (từ trace):** `task relates to SLA or incident`  
+**MCP tools được gọi:** Không có  
+**Workers called sequence:** `retrieval_worker -> synthesis_worker`
 
 **Kết quả thực tế:**
-- final_answer (ngắn): _________________
-- confidence: _________________
-- Correct routing? Yes / No
+- final_answer (ngắn): `[SYNTHESIS ERROR] Không thể gọi LLM. Kiểm tra API key trong .env.`
+- confidence: `0.1`
+- Correct routing? **Yes**
 
-**Nhận xét:** _(Routing này đúng hay sai? Nếu sai, nguyên nhân là gì?)_
+**Nhận xét:**
 
-_________________
+Route này hợp lý vì câu hỏi thuộc nhóm SLA/incident. Lỗi output không nằm ở route mà nằm ở bước synthesis.
 
 ---
 
 ## Routing Decision #2
 
 **Task đầu vào:**
-> _________________
+> Khách hàng Flash Sale yêu cầu hoàn tiền vì sản phẩm lỗi — được không?
 
-**Worker được chọn:** `___________________`  
-**Route reason (từ trace):** `___________________`  
-**MCP tools được gọi:** _________________  
-**Workers called sequence:** _________________
+**Worker được chọn:** `policy_tool_worker`  
+**Route reason (từ trace):** `task relates to policy or access check`  
+**MCP tools được gọi:** `search_kb`  
+**Workers called sequence:** `policy_tool_worker -> retrieval_worker -> synthesis_worker`
 
 **Kết quả thực tế:**
-- final_answer (ngắn): _________________
-- confidence: _________________
-- Correct routing? Yes / No
+- final_answer (ngắn): `[SYNTHESIS ERROR] Không thể gọi LLM. Kiểm tra API key trong .env.`
+- confidence: `0.1`
+- Correct routing? **Yes**
 
 **Nhận xét:**
 
-_________________
+Route đúng vì task chứa policy exception (Flash Sale). Trace xác nhận policy worker phát hiện `flash_sale_exception` trước khi sang synthesis.
 
 ---
 
 ## Routing Decision #3
 
 **Task đầu vào:**
-> _________________
+> Cần cấp quyền Level 3 để khắc phục P1 khẩn cấp. Quy trình là gì?
 
-**Worker được chọn:** `___________________`  
-**Route reason (từ trace):** `___________________`  
-**MCP tools được gọi:** _________________  
-**Workers called sequence:** _________________
+**Worker được chọn:** `policy_tool_worker`  
+**Route reason (từ trace):** `task relates to policy or access check`  
+**MCP tools được gọi:** `search_kb`, `get_ticket_info`  
+**Workers called sequence:** `policy_tool_worker -> retrieval_worker -> synthesis_worker`
 
 **Kết quả thực tế:**
-- final_answer (ngắn): _________________
-- confidence: _________________
-- Correct routing? Yes / No
+- final_answer (ngắn): `[SYNTHESIS ERROR] Không thể gọi LLM. Kiểm tra API key trong .env.`
+- confidence: `0.1`
+- Correct routing? **Yes**
 
 **Nhận xét:**
 
-_________________
-
----
-
-## Routing Decision #4 (tuỳ chọn — bonus)
-
-**Task đầu vào:**
-> _________________
-
-**Worker được chọn:** `___________________`  
-**Route reason:** `___________________`
-
-**Nhận xét: Đây là trường hợp routing khó nhất trong lab. Tại sao?**
-
-_________________
+Đây là case tốt cho multi-agent vì vừa cần policy/access vừa cần tín hiệu ticket P1. Route chọn policy worker trước là phù hợp và có MCP trace đầy đủ.
 
 ---
 
@@ -93,29 +79,27 @@ _________________
 
 | Worker | Số câu được route | % tổng |
 |--------|------------------|--------|
-| retrieval_worker | ___ | ___% |
-| policy_tool_worker | ___ | ___% |
-| human_review | ___ | ___% |
+| retrieval_worker | 1 | 33.3% |
+| policy_tool_worker | 2 | 66.7% |
+| human_review | 0 | 0.0% |
 
 ### Routing Accuracy
 
-> Trong số X câu nhóm đã chạy, bao nhiêu câu supervisor route đúng?
+Trong 3 câu đã chạy trong thư mục trace:
 
-- Câu route đúng: ___ / ___
-- Câu route sai (đã sửa bằng cách nào?): ___
-- Câu trigger HITL: ___
+- Câu route đúng: 3 / 3
+- Câu route sai: 0
+- Câu trigger HITL: 0
 
 ### Lesson Learned về Routing
 
-> Quyết định kỹ thuật quan trọng nhất nhóm đưa ra về routing logic là gì?  
-> (VD: dùng keyword matching vs LLM classifier, threshold confidence cho HITL, v.v.)
-
-1. ___________________
-2. ___________________
+1. Rule-based routing theo intent keyword (SLA/incident vs policy/access) đang đủ chính xác cho tập trace nhỏ.
+2. `route_reason` là bắt buộc để tách lỗi routing khỏi lỗi synthesis, giúp debug nhanh hơn.
 
 ### Route Reason Quality
 
-> Nhìn lại các `route_reason` trong trace — chúng có đủ thông tin để debug không?  
-> Nếu chưa, nhóm sẽ cải tiến format route_reason thế nào?
+`route_reason` hiện đọc được nhưng còn hơi ngắn. Nên nâng cấp format thành:
 
-_________________
+`matched_intents=[policy,access]; selected=policy_tool_worker; confidence=0.xx; fallback=false`
+
+Format này giúp debug rõ hơn khi task chứa nhiều intent chồng lấp.
